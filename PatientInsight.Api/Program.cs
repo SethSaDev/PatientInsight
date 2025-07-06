@@ -45,8 +45,8 @@ builder.Services.AddMassTransit(bcfg =>
     {
         cfg.Host(new Uri(builder.Configuration["ServiceBus:Host"]!), h =>
         {
-            h.Username(builder.Configuration["ServiceBus:User"]);
-            h.Password(builder.Configuration["ServiceBus:Password"]);
+            h.Username(builder.Configuration["ServiceBus:User"] ?? "guest");
+            h.Password(builder.Configuration["ServiceBus:Password"] ?? "guest");
         });
 
         cfg.ReceiveEndpoint("patient-data-ingest-queue", e =>

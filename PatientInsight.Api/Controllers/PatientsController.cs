@@ -1,3 +1,4 @@
+using PatientInsight.Api.Logging;
 using Microsoft.AspNetCore.Mvc;
 using PatientInsight.Api.Consumers;
 using PatientInsight.Core.Interfaces;
@@ -27,12 +28,12 @@ public class PatientsController : ControllerBase
     [HttpGet("exists")]
     public async Task<ActionResult<ApiResponse<int?>>> IsExistingPatient([FromQuery] string ssn, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Checking existence for SSN: {Ssn}", ssn);
+        _logger.LogInformation("Checking existence for SSN: {Ssn}", PiiMask.Ssn(ssn));
         var result = await _patientService.IsExistingPatientAsync(ssn, cancellationToken);
         
         if (result == null)
         {
-            _logger.LogWarning("Patient not found for SSN: {Ssn}", ssn);
+            _logger.LogWarning("Patient not found for SSN: {Ssn}", PiiMask.Ssn(ssn));
             return NotFound(ApiResponse<int?>.Fail("Patient not found."));
         }
 
@@ -54,7 +55,7 @@ public class PatientsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ApiResponse<int>>> RegisterPatient([FromBody] PatientDto patientDto, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Registering new patient: {FirstName} {LastName}", patientDto.FirstName, patientDto.LastName);
+        _logger.LogInformation("Registering new patient");
         var patientId = await _patientService.RegisterPatientAsync(patientDto, cancellationToken);
 
         await _publishEndpoint.Publish(new PatientDataIngestEvent

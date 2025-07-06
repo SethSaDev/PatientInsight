@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SearchBarComponent } from '../../../shared/components/search-bar/search-bar.component';
-import { SpinnerComponent } from '../../../shared/components/spinner/spinner.component';
+import { SearchBarComponent } from '../../../../shared/components/search-bar/search-bar.component';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner.component';
 import { PatientApiService } from '../../services/patient-api.service';
 import { PatientDto } from '../../models/patient.dto';
 

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    name: API (.NET 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore PatientInsight.sln
+      - run: dotnet build PatientInsight.sln --no-restore -c Release
+      - run: dotnet test PatientInsight.sln --no-build -c Release --collect:"XPlat Code Coverage"
+
+  ui:
+    name: UI (Angular 17)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PatientInsightUi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: PatientInsightUi/package-lock.json
+      - run: npm ci
+      - run: npx ng build
+      - run: npx ng test --watch=false --browsers=ChromeHeadless

@@ -1,50 +1,79 @@
-# PatientInsight (formerly AtlasPatient)
+# PatientInsight
 
-Enterprise-grade Patient Management System refactored for scale, resilience, and reliability.
+[![CI](https://github.com/SethSaDev/PatientInsight/actions/workflows/ci.yml/badge.svg)](https://github.com/SethSaDev/PatientInsight/actions/workflows/ci.yml)
+![.NET 8](https://img.shields.io/badge/.NET-8-512BD4) ![Angular 17](https://img.shields.io/badge/Angular-17-DD0031) ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core%208-CC2927) ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-MassTransit-FF6600)
 
-## 🚀 Key Improvements
+Patient records service with an ASP.NET Core API, an event-driven ingestion pipeline and an Angular front end.
+Clinicians look up a patient by SSN, register new patients, and see lab visits, medications and vaccinations pulled from an external clinical API.
 
-### 🏗️ Architecture & Rebranding
-- **Transition**: Rebranded from `AtlasPatient` to `PatientInsight` across all projects, namespaces, and types.
-- **Clean Architecture**: Restructured into four distinct layers (Domain, Core, Infrastructure, Api) to decouple business logic from external concerns.
-- **Modern UI**: Angular 17+ standalone application with a scalable folder structure (Core, Shared, Features).
-
-### 🛡️ Resilience & Reliability
-- **Bug Fixes**:
-  - Corrected swapped external API endpoints (Medications vs. Vaccinations).
-  - Resolved hardcoded SSN bug in the message consumer.
-- **Concurrency**: Propagated `CancellationToken` support throughout the entire stack (Controller -> Service -> Repository -> External HTTP).
-- **Error Handling**: Implemented RFC-compliant `ProblemDetails` via a global exception middleware.
-- **Validation**: Integrated `FluentValidation` for logic-based request checks.
-
-### ⚡ Performance & Quality
-- **AutoMapper**: Standardized object-to-object mapping.
-- **Structured Logging**: Meaningful telemetry using parameter-based logging templates.
-- **Signals**: Signal-based state management in the Angular UI for high-performance reactivity.
-
-## 🛠️ Tech Stack
-
-- **Backend**: .NET 7 (C#), Entity Framework Core (SQL Server)
-- **Messaging**: MassTransit with RabbitMQ
-- **Frontend**: Angular 17 (Standalone, Signals, RxJS)
-- **Library**: FluentValidation, AutoMapper, ProblemDetails
-
-## 📂 Project Structure
+## Architecture
 
 ```text
-/
-├── PatientInsight.sln
-├── PatientInsight.Api             # Web API, Controllers, Middleware, Consumers
-├── PatientInsight.Core            # Interfaces, Business Logic (Services)
-├── PatientInsight.Infrastructure  # DB Context, Repositories, Migrations
-├── PatientInsight.Domain          # Entities, DTOs, Mapping Profiles
-├── PatientInsight.Tests           # XUnit / Moq Unit Tests
-└── PatientInsightUi/              # Angular 17 Frontend
+Angular 17 UI ──HTTP──▶ PatientInsight.Api ──▶ PatientInsight.Core ──▶ PatientInsight.Infrastructure ──▶ SQL Server
+                          │  (controllers,        (services,              (EF Core DbContext,
+                          │   validation,          business rules)         repositories)
+                          │   ProblemDetails)
+                          │
+                RabbitMQ ─┴─▶ PatientDataIngestConsumer ──▶ external clinical API (token auth)
+                              syncs lab visits, medications, vaccinations
 ```
 
-## 🏁 Getting Started
+| Project | Responsibility |
+|---|---|
+| `PatientInsight.Domain` | Entities and DTOs, no external dependencies |
+| `PatientInsight.Core` | Service interfaces and business logic, typed `HttpClient` for the external API |
+| `PatientInsight.Infrastructure` | EF Core 8 `AppDbContext` and repositories for SQL Server |
+| `PatientInsight.Api` | REST controllers, FluentValidation, global exception middleware returning RFC 7807 `ProblemDetails`, MassTransit consumer |
+| `PatientInsight.Tests` | xUnit + Moq tests for the controller and PII masking |
+| `PatientInsightUi` | Angular 17 standalone components, signals, functional HTTP interceptors |
 
-1. **Database**: Update connection string in `appsettings.json`.
-2. **Bus**: Ensure RabbitMQ is running or update `ServiceBus` config.
-3. **Backend**: `dotnet run --project PatientInsight.Api`
-4. **Frontend**: `cd PatientInsightUi && npm install && npm start`
+## Design notes
+
+- **Event-driven ingestion.** Pulling clinical history from the external API is slow, so it runs in a MassTransit consumer on RabbitMQ instead of inside the request. The API stays responsive and a slow upstream only backs up its own queue.
+- **Cancellation end to end.** `CancellationToken` flows from the controller through services and repositories into outbound HTTP calls, so abandoned requests stop doing work.
+- **PII-safe logging.** SSNs are masked to the last four digits (`***-**-6789`) before they reach structured logs. See [`PiiMask`](PatientInsight.Api/Logging/PiiMask.cs).
+- **Consistent errors.** One middleware maps exceptions to `ProblemDetails`, so the UI handles a single error shape.
+
+## API
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/patients/exists?ssn=` | Returns the patient id if a record exists |
+| `GET` | `/api/patients/{id}` | Patient detail with visits, labs, medications and vaccinations |
+| `POST` | `/api/patients` | Registers a patient and queues data ingestion |
+
+Swagger UI is served at `/swagger` in Development.
+
+## Running locally
+
+Prerequisites: .NET 8 SDK, Node 20, SQL Server and RabbitMQ (Docker is easiest).
+
+```bash
+docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='YourStrong@Passw0rd' -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+docker run -d --name rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+
+# create the schema
+sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd' -i PatientDB.sql
+
+dotnet run --project PatientInsight.Api
+
+cd PatientInsightUi
+npm ci
+npm start            # http://localhost:4200
+```
+
+Connection strings and the external API base URL live in `PatientInsight.Api/appsettings.json`. Override them with environment variables or user secrets for anything beyond local development.
+
+## Tests
+
+```bash
+dotnet test                                                      # API: xUnit + Moq
+cd PatientInsightUi && npx ng test --watch=false --browsers=ChromeHeadless   # UI: Jasmine/Karma
+```
+
+CI runs both suites plus the Angular production build on every push.
+
+## Author
+
+**Seth Sanders** - Senior Software Engineer (.NET, Angular/React, Azure)
+[github.com/SethSaDev](https://github.com/SethSaDev)

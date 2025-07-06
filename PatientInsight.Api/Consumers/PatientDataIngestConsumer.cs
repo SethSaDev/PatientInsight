@@ -1,3 +1,4 @@
+using PatientInsight.Api.Logging;
 using PatientInsight.Core.Interfaces;
 using MassTransit;
 
@@ -24,7 +25,7 @@ public class PatientDataIngestConsumer : IConsumer<PatientDataIngestEvent>
         var message = context.Message;
         var cancellationToken = context.CancellationToken;
 
-        _logger.LogInformation("Ingesting data for PatientId={PatientId}, SSN={Ssn}", message.PatientId, message.Ssn);
+        _logger.LogInformation("Ingesting data for PatientId={PatientId}, SSN={Ssn}", message.PatientId, PiiMask.Ssn(message.Ssn));
 
         var token = await _authService.GetAuthTokenAsync(cancellationToken);
 
